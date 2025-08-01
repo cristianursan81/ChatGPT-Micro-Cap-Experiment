@@ -7,11 +7,16 @@ logic or behaviour.
 
 from datetime import datetime
 import os
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 import numpy as np
 import pandas as pd
 import yfinance as yf
 from typing import cast
+import schedule
+import time
 
 # Shared file locations
 DATA_DIR = "Start Your Own"
@@ -20,6 +25,8 @@ TRADE_LOG_CSV = f"{DATA_DIR}/chatgpt_trade_log.csv"
 
 # Today's date reused across logs
 today = datetime.today().strftime("%Y-%m-%d")
+now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+market_summary = f"<p><b>Report generated:</b> {now}</p>"
 
 
 def process_portfolio(portfolio: pd.DataFrame, starting_cash: float) -> pd.DataFrame:
@@ -376,26 +383,313 @@ def daily_results(chatgpt_portfolio: pd.DataFrame, cash: float) -> None:
     )
 
 
+def send_email(subject, html_body, to_email, from_email, from_password):
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = from_email
+    msg["To"] = to_email
+
+    part = MIMEText(html_body, "html")
+    msg.attach(part)
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(from_email, from_password)
+        server.sendmail(from_email, to_email, msg.as_string())
+
+
+def dataframe_to_html(df):
+    """Convert a pandas DataFrame to an HTML table with some basic styling."""
+    return df.to_html(index=False, border=1, justify="center", classes="portfolio-table", escape=False)
+
+
+def portfolio_to_custom_html(portfolio):
+    total_cost_basis = 0
+    total_risk = 0
+    total_market_value = 0
+    total_pnl = 0
+    rows = ""
+    for stock in portfolio:
+        ticker = stock["ticker"]
+        shares = stock["shares"]
+        buy_price = stock["buy_price"]
+        stop_loss = stock["stop_loss"]
+        cost_basis = stock["cost_basis"]
+        # Fetch live price and daily % change
+        try:
+            data = yf.Ticker(ticker).history(period="2d")
+            if not data.empty and len(data) > 1:
+                latest_price = round(data["Close"].iloc[-1], 2)
+                prev_price = round(data["Close"].iloc[-2], 2)
+                daily_pct = round(100 * (latest_price - prev_price) / prev_price, 2)
+            elif not data.empty:
+                latest_price = round(data["Close"].iloc[-1], 2)
+                daily_pct = 0.0
+            else:
+                latest_price = "N/A"
+                daily_pct = "N/A"
+        except Exception:
+            latest_price = "N/A"
+            daily_pct = "N/A"
+        # Calculate market value and PnL
+        if isinstance(latest_price, float):
+            market_value = round(shares * latest_price, 2)
+            pnl = round((latest_price - buy_price) * shares, 2)
+            total_market_value += market_value
+            total_pnl += pnl
+        else:
+            market_value = "N/A"
+            pnl = "N/A"
+        risk_per_share = round(buy_price - stop_loss, 2)
+        total_risk_stock = round(risk_per_share * shares, 2)
+        total_cost_basis += cost_basis
+        total_risk += total_risk_stock
+        # Highlight if stop-loss triggered
+        row_style = ""
+        if isinstance(latest_price, float) and latest_price <= stop_loss:
+            row_style = ' style="background-color:#ffcccc;"'
+        pnl_style = 'color:red;' if isinstance(pnl, float) and pnl < 0 else ''
+        rows += f"""
+        <tr{row_style}>
+            <td>{ticker}</td>
+            <td>{shares}</td>
+            <td>${buy_price:,.2f}</td>
+            <td>${stop_loss:,.2f}</td>
+            <td>💰 ${cost_basis:,.2f}</td>
+            <td>📈 ${latest_price if latest_price == 'N/A' else f"{latest_price:,.2f}"}</td>
+            <td>{daily_pct if daily_pct == 'N/A' else f"{daily_pct:.2f}%"}</td>
+            <td>💵 ${market_value if market_value == 'N/A' else f"{market_value:,.2f}"}</td>
+            <td><b style="{'color:red;' if pnl < 0 else ''}">📊 ${pnl if pnl == 'N/A' else f"{pnl:,.2f}"}</b></td>
+            <td>${risk_per_share:,.2f}</td>
+            <td>${total_risk_stock:,.2f}</td>
+        </tr>
+        """
+
+    html = f"""
+    <table border="1" style="border-collapse:collapse;text-align:center;">
+        <tr>
+            <th>Ticker</th>
+            <th>Shares</th>
+            <th>Buy Price</th>
+            <th>Stop Loss</th>
+            <th>💰 Cost Basis</th>
+            <th>📈 Last Price</th>
+            <th>📊 Daily % Change</th>
+            <th>💵 Market Value</th>
+            <th>📊 PnL</th>
+            <th>📉 Risk (per share)</th>
+            <th>⚠️ Total Risk</th>
+        </tr>
+        {rows}
+        <tr>
+            <td><b>Total</b></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td><b>${total_cost_basis:,.2f}</b></td>
+            <td></td>
+            <td></td>
+            <td><b>${total_market_value:,.2f}</b></td>
+            <td><b style="{'color:red;' if total_pnl < 0 else ''}">${total_pnl:,.2f}</b></td>
+            <td></td>
+            <td><b>${total_risk:,.2f}</b></td>
+        </tr>
+    </table>
+    """
+    return html, total_market_value, total_pnl
+
+
+def get_sp500_daily_change():
+    try:
+        data = yf.Ticker("^GSPC").history(period="2d")
+        if not data.empty and len(data) > 1:
+            latest = data["Close"].iloc[-1]
+            prev = data["Close"].iloc[-2]
+            pct = round(100 * (latest - prev) / prev, 2)
+            return pct
+    except Exception:
+        pass
+    return "N/A"
+
+
+def suggest_microcap_momentum_stocks():
+    # Example: S&P 500 tickers (for demo, use a small subset or load from a file)
+    tickers = ["AAPL", "TSLA", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "NFLX", "AMD", "INTC", "IBM", "ORCL", "QCOM", "CSCO", "ADBE"]  # Add more as desired
+    results = []
+    for ticker in tickers:
+        try:
+            data = yf.download(ticker, period="21d", interval="1d", progress=False, auto_adjust=False)
+            if data.empty or len(data) < 15:
+                continue
+            price_now = data["Close"].iloc[-1]
+            price_5d_ago = data["Close"].iloc[-6]
+            pct_change = ((price_now - price_5d_ago) / price_5d_ago) * 100
+            avg_volume = data["Volume"].tail(5).mean()
+            rsi = get_rsi(data["Close"]).iloc[-1]
+            results.append({
+                "Ticker": ticker,
+                "5d % Change": round(pct_change, 2),
+                "Avg Vol (5d)": int(avg_volume),
+                "RSI": round(rsi, 2)
+            })
+        except Exception:
+            continue
+
+    df = pd.DataFrame(results)
+    if df.empty:
+        momentum_html = "<p>No suggestions today.</p>"
+    else:
+        # Example filter: RSI between 30 and 70, volume above median
+        median_vol = df["Avg Vol (5d)"].median()
+        filtered = df[(df["RSI"] > 30) & (df["RSI"] < 70) & (df["Avg Vol (5d)"] > median_vol)]
+        top = filtered.sort_values("5d % Change", ascending=False).head(3)
+        momentum_html = "<h3>Momentum Screener: Top 3 Stocks (5-Day % Change, RSI, Volume)</h3>"
+        momentum_html += top.to_html(index=False, border=1, justify="center")
+
+    # Compose and send email
+    send_email(
+        subject="Daily Stock Suggestions - Momentum Screener",
+        html_body=f"""
+            <html>
+            <body>
+                <h2>Top 3 Momentum Stocks (Last 5 Days)</h2>
+                {momentum_html}
+                <p style="font-size:12px;color:gray;">This is an automated suggestion based on 5-day price momentum.</p>
+            </body>
+            </html>
+        """,
+        to_email="cristianursan81@gmail.com",
+        from_email="cristianursan81@gmail.com",
+        from_password="qvtv pebu bajp uoqp"
+    )
+
+
 def main() -> None:
-    """Example execution using the default portfolio.
-        Be sure to fill in starting capital.
-        Edit rows with your portfolio
-        Note: Cost Basis = Shares X Buying Price"""
-    
-    starting_capital = 1_000
+    # Suggest stocks and email the suggestions
+    suggestions = suggest_microcap_momentum_stocks()
+    # Email credentials (replace with your own)
+    to_email = "cristianursan81@gmail.com"
+    from_email = "cristianursan81@gmail.com"
+    from_password = "qvtv pebu bajp uoqp"  # Use an app password, not your main password!
+    send_email(
+        subject="Your Microcap Stock Suggestions",
+        html_body=suggestions,  # <-- changed from body= to html_body=
+        to_email=to_email,
+        from_email=from_email,
+        from_password=from_password
+    )
+
+    starting_capital = 100
     cash = starting_capital
     chatgpt_portfolio = [
-        {"ticker": "ABEO", "shares": 6, "stop_loss": 4.9, "buy_price": 5.77, "cost_basis": 34.62},
-        {"ticker": "IINN", "shares": 14, "stop_loss": 1.1, "buy_price": 1.5, "cost_basis": 21.0},
-        {"ticker": "ACTU", "shares": 6, "stop_loss": 4.89, "buy_price": 5.75, "cost_basis": 34.5},
+        {"ticker": "AAPL", "shares": 5, "stop_loss": 150, "buy_price": 180, "cost_basis": 900},
+        {"ticker": "TSLA", "shares": 5, "stop_loss": 500, "buy_price": 700, "cost_basis": 3500},
+        {"ticker": "NVDA", "shares": 5, "stop_loss": 350, "buy_price": 450, "cost_basis": 2250},
+        {"ticker": "DT",   "shares": 5, "stop_loss": 35,  "buy_price": 45,  "cost_basis": 225},
     ]
     chatgpt_portfolio = pd.DataFrame(chatgpt_portfolio)
-
 
     process_portfolio(chatgpt_portfolio, cash)
     daily_results(chatgpt_portfolio, cash)
 
 
+# Add at the bottom of your script
+def job():
+    # Place your main email-sending code here
+    # For example:
+    # main()
+    pass
+
+schedule.every().day.at("09:00").do(job)  # Set your desired time (24h format)
+
+while True:
+    schedule.run_pending()
+    time.sleep(60)
+
+
 if __name__ == "__main__":
-    main()
+    chatgpt_portfolio = [
+        {"ticker": "AAPL", "shares": 5, "stop_loss": 150, "buy_price": 180, "cost_basis": 900},
+        {"ticker": "TSLA", "shares": 5, "stop_loss": 500, "buy_price": 700, "cost_basis": 3500},
+        {"ticker": "NVDA", "shares": 5, "stop_loss": 350, "buy_price": 450, "cost_basis": 2250},
+        {"ticker": "DT",   "shares": 5, "stop_loss": 35,  "buy_price": 45,  "cost_basis": 225},
+    ]
+    portfolio_html, total_market_value, total_pnl = portfolio_to_custom_html(chatgpt_portfolio)
+    sp500_change = get_sp500_daily_change()
+    portfolio_descriptions = """
+    <ul style="font-size:13px;">
+      <li><b>Ticker</b>: Stock symbol</li>
+      <li><b>Shares</b>: Number of shares held</li>
+      <li><b>Buy Price</b>: Price per share at purchase</li>
+      <li><b>Stop Loss</b>: Price at which to sell to limit loss</li>
+      <li><b>💰 Cost Basis</b>: Total amount invested (Shares × Buy Price)</li>
+      <li><b>📈 Last Price</b>: Most recent closing price</li>
+      <li><b>📊 Daily % Change</b>: Change from previous close</li>
+      <li><b>💵 Market Value</b>: Shares × Last Price</li>
+      <li><b>📊 PnL</b>: (Last Price - Buy Price) × Shares</li>
+      <li><b>📉 Risk (per share)</b>: Buy Price minus Stop Loss</li>
+      <li><b>⚠️ Total Risk</b>: Risk per share × Shares</li>
+    </ul>
+    """
+    analytics_html = f"""
+    <h3>Advanced Analytics</h3>
+    <ul style="font-size:13px;">
+      <li><b>Portfolio Market Value:</b> ${total_market_value:,.2f}</li>
+      <li><b>Portfolio Total PnL:</b> ${total_pnl:,.2f}</li>
+      <li><b>S&amp;P 500 Daily % Change:</b> {sp500_change}%</li>
+    </ul>
+    """
+
+    # --- Momentum Screener Section ---
+    tickers = ["AAPL", "TSLA", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "NFLX", "AMD", "INTC", "IBM", "ORCL", "QCOM", "CSCO", "ADBE"]  # Add more as desired
+    results = []
+    for ticker in tickers:
+        try:
+            data = yf.download(ticker, period="21d", interval="1d", progress=False, auto_adjust=False)
+            if data.empty or len(data) < 15:
+                continue
+            price_now = data["Close"].iloc[-1]
+            price_5d_ago = data["Close"].iloc[-6]
+            pct_change = ((price_now - price_5d_ago) / price_5d_ago) * 100
+            avg_volume = data["Volume"].tail(5).mean()
+            rsi = get_rsi(data["Close"]).iloc[-1]
+            results.append({
+                "Ticker": ticker,
+                "5d % Change": round(pct_change, 2),
+                "Avg Vol (5d)": int(avg_volume),
+                "RSI": round(rsi, 2)
+            })
+        except Exception:
+            continue
+
+    df = pd.DataFrame(results)
+    if df.empty:
+        momentum_html = "<p>No suggestions today.</p>"
+    else:
+        # Example filter: RSI between 30 and 70, volume above median
+        median_vol = df["Avg Vol (5d)"].median()
+        filtered = df[(df["RSI"] > 30) & (df["RSI"] < 70) & (df["Avg Vol (5d)"] > median_vol)]
+        top = filtered.sort_values("5d % Change", ascending=False).head(3)
+        momentum_html = "<h3>Momentum Screener: Top 3 Stocks (5-Day % Change, RSI, Volume)</h3>"
+        momentum_html += top.to_html(index=False, border=1, justify="center")
+
+    # --- Send the combined email ---
+    send_email(
+        subject="Your Portfolio & Momentum Screener",
+        html_body=f"""
+            <html>
+            <body>
+                {market_summary}
+                <h2>Your Portfolio - {today}</h2>
+                {portfolio_html}
+                {portfolio_descriptions}
+                {analytics_html}
+                {momentum_html}
+                <p style="font-size:12px;color:gray;">This is an automated message.</p>
+            </body>
+            </html>
+        """,
+        to_email="cristianursan81@gmail.com",
+        from_email="cristianursan81@gmail.com",
+        from_password="qvtv pebu bajp uoqp"
+    )
 
