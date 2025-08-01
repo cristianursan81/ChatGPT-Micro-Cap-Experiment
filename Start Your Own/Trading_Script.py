@@ -7,9 +7,6 @@ logic or behaviour.
 
 from datetime import datetime
 import os
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 import numpy as np
 import pandas as pd
@@ -19,9 +16,9 @@ import schedule
 import time
 
 # Shared file locations
-DATA_DIR = "Start Your Own"
-PORTFOLIO_CSV = f"{DATA_DIR}/chatgpt_portfolio_update.csv"
-TRADE_LOG_CSV = f"{DATA_DIR}/chatgpt_trade_log.csv"
+DATA_DIR = Path(__file__).resolve().parent
+PORTFOLIO_CSV = DATA_DIR / "chatgpt_portfolio_update.csv"
+TRADE_LOG_CSV = DATA_DIR / "chatgpt_trade_log.csv"
 
 # Today's date reused across logs
 today = datetime.today().strftime("%Y-%m-%d")
@@ -146,7 +143,7 @@ def process_portfolio(portfolio: pd.DataFrame, starting_cash: float) -> pd.DataF
     results.append(total_row)
 
     df = pd.DataFrame(results)
-    if os.path.exists(PORTFOLIO_CSV):
+    if PORTFOLIO_CSV.exists():
         existing = pd.read_csv(PORTFOLIO_CSV)
         existing = existing[existing["Date"] != today]
         print("rows for today already logged, not saving results to CSV...")
@@ -177,7 +174,7 @@ def log_sell(
 
     portfolio = portfolio[portfolio["ticker"] != ticker]
 
-    if os.path.exists(TRADE_LOG_CSV):
+    if TRADE_LOG_CSV.exists():
         df = pd.read_csv(TRADE_LOG_CSV)
         df = pd.concat([df, pd.DataFrame([log])], ignore_index=True)
     else:
@@ -222,7 +219,7 @@ def log_manual_buy(
         "Reason": "MANUAL BUY - New position",
     }
 
-    if os.path.exists(TRADE_LOG_CSV):
+    if TRADE_LOG_CSV.exists():
         df = pd.read_csv(TRADE_LOG_CSV)
         df = pd.concat([df, pd.DataFrame([log])], ignore_index=True)
     else:
@@ -286,7 +283,7 @@ def log_manual_sell(
         "Shares Sold": shares_sold,
         "Sell Price": sell_price,
     }
-    if os.path.exists(TRADE_LOG_CSV):
+    if TRADE_LOG_CSV.exists():
         df = pd.read_csv(TRADE_LOG_CSV)
         df = pd.concat([df, pd.DataFrame([log])], ignore_index=True)
     else:
