@@ -6,7 +6,11 @@ logic or behaviour.
 """
 
 from datetime import datetime
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 import os
+from pathlib import Path
+import smtplib
 
 import numpy as np
 import pandas as pd
@@ -26,7 +30,7 @@ now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 market_summary = f"<p><b>Report generated:</b> {now}</p>"
 
 
-def process_portfolio(portfolio: pd.DataFrame, starting_cash: float) -> pd.DataFrame:
+def process_portfolio(portfolio: pd.DataFrame, starting_cash: float) -> pd.DataFrame:python MyTradingScript/Trading_Script.py
     """Update daily price information, log stop-loss sells, and prompt for trades.
 
     The function iterates through each position, retrieves the latest close
@@ -538,9 +542,14 @@ def suggest_microcap_momentum_stocks():
         # Example filter: RSI between 30 and 70, volume above median
         median_vol = df["Avg Vol (5d)"].median()
         filtered = df[(df["RSI"] > 30) & (df["RSI"] < 70) & (df["Avg Vol (5d)"] > median_vol)]
-        top = filtered.sort_values("5d % Change", ascending=False).head(3)
-        momentum_html = "<h3>Momentum Screener: Top 3 Stocks (5-Day % Change, RSI, Volume)</h3>"
-        momentum_html += top.to_html(index=False, border=1, justify="center")
+        filtered["5d % Change"] = pd.to_numeric(filtered["5d % Change"], errors="coerce")
+        filtered = filtered.dropna(subset=["5d % Change"])
+        if filtered.empty:
+            momentum_html = "<p>No suggestions today.</p>"
+        else:
+            top = filtered.sort_values("5d % Change", ascending=False).head(3)
+            momentum_html = "<h3>Momentum Screener: Top 3 Stocks (5-Day % Change, RSI, Volume)</h3>"
+            momentum_html += top.to_html(index=False, border=1, justify="center")
 
     # Compose and send email
     send_email(
@@ -558,6 +567,14 @@ def suggest_microcap_momentum_stocks():
         from_email="cristianursan81@gmail.com",
         from_password="qvtv pebu bajp uoqp"
     )
+
+
+def get_rsi(series, period=14):
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
 
 
 def main() -> None:
@@ -665,28 +682,37 @@ if __name__ == "__main__":
         # Example filter: RSI between 30 and 70, volume above median
         median_vol = df["Avg Vol (5d)"].median()
         filtered = df[(df["RSI"] > 30) & (df["RSI"] < 70) & (df["Avg Vol (5d)"] > median_vol)]
-        top = filtered.sort_values("5d % Change", ascending=False).head(3)
-        momentum_html = "<h3>Momentum Screener: Top 3 Stocks (5-Day % Change, RSI, Volume)</h3>"
-        momentum_html += top.to_html(index=False, border=1, justify="center")
+        filtered["5d % Change"] = pd.to_numeric(filtered["5d % Change"], errors="coerce")
+        filtered = filtered.dropna(subset=["5d % Change"])
+        if filtered.empty:
+            momentum_html = "<p>No suggestions today.</p>"
+        else:
+            top = filtered.sort_values("5d % Change", ascending=False).head(3)
+            momentum_html = "<h3>Momentum Screener: Top 3 Stocks (5-Day % Change, RSI, Volume)</h3>"
+            momentum_html += top.to_html(index=False, border=1, justify="center")
 
     # --- Send the combined email ---
-    send_email(
-        subject="Your Portfolio & Momentum Screener",
-        html_body=f"""
-            <html>
-            <body>
-                {market_summary}
-                <h2>Your Portfolio - {today}</h2>
-                {portfolio_html}
-                {portfolio_descriptions}
-                {analytics_html}
-                {momentum_html}
-                <p style="font-size:12px;color:gray;">This is an automated message.</p>
-            </body>
-            </html>
-        """,
-        to_email="cristianursan81@gmail.com",
-        from_email="cristianursan81@gmail.com",
-        from_password="qvtv pebu bajp uoqp"
-    )
+    try:
+        send_email(
+            subject="Your Portfolio & Momentum Screener",
+            html_body=f"""
+                <html>
+                <body>
+                    {market_summary}
+                    <h2>Your Portfolio - {today}</h2>
+                    {portfolio_html}
+                    {portfolio_descriptions}
+                    {analytics_html}
+                    {momentum_html}
+                    <p style="font-size:12px;color:gray;">This is an automated message.</p>
+                </body>
+                </html>
+            """,
+            to_email="cristianursan81@gmail.com",
+            from_email="cristianursan81@gmail.com",
+            from_password="qvtv pebu bajp uoqp"
+        )
+        print("Email sent successfully!")
+    except Exception as e:
+        print(f"Failed to send email: {e}")
 
