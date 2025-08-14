@@ -30,7 +30,7 @@ now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 market_summary = f"<p><b>Report generated:</b> {now}</p>"
 
 
-def process_portfolio(portfolio: pd.DataFrame, starting_cash: float) -> pd.DataFrame:python MyTradingScript/Trading_Script.py
+def process_portfolio(portfolio: pd.DataFrame, starting_cash: float) -> pd.DataFrame:
     """Update daily price information, log stop-loss sells, and prompt for trades.
 
     The function iterates through each position, retrieves the latest close
@@ -529,7 +529,7 @@ def suggest_microcap_momentum_stocks():
             results.append({
                 "Ticker": ticker,
                 "5d % Change": round(pct_change, 2),
-                "Avg Vol (5d)": int(avg_volume),
+                "Avg Vol (5d)": float(avg_volume.iloc[0]) if hasattr(avg_volume, "iloc") else float(avg_volume),
                 "RSI": round(rsi, 2)
             })
         except Exception:
@@ -539,10 +539,10 @@ def suggest_microcap_momentum_stocks():
     if df.empty:
         momentum_html = "<p>No suggestions today.</p>"
     else:
-        # Example filter: RSI between 30 and 70, volume above median
+        for col in ["RSI", "Avg Vol (5d)", "5d % Change"]:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
         median_vol = df["Avg Vol (5d)"].median()
         filtered = df[(df["RSI"] > 30) & (df["RSI"] < 70) & (df["Avg Vol (5d)"] > median_vol)]
-        filtered["5d % Change"] = pd.to_numeric(filtered["5d % Change"], errors="coerce")
         filtered = filtered.dropna(subset=["5d % Change"])
         if filtered.empty:
             momentum_html = "<p>No suggestions today.</p>"
@@ -586,7 +586,7 @@ def main() -> None:
     from_password = "qvtv pebu bajp uoqp"  # Use an app password, not your main password!
     send_email(
         subject="Your Microcap Stock Suggestions",
-        html_body=suggestions,  # <-- changed from body= to html_body=
+        html_body=suggestions,  # <-- changed from body=to html_body=
         to_email=to_email,
         from_email=from_email,
         from_password=from_password
@@ -613,106 +613,108 @@ def job():
     # main()
     pass
 
-schedule.every().day.at("09:00").do(job)  # Set your desired time (24h format)
-
-while True:
-    schedule.run_pending()
-    time.sleep(60)
+# schedule.every().day.at("09:00").do(job)
+# while True:
+#     schedule.run_pending()
+#     time.sleep(60)
 
 
 if __name__ == "__main__":
-    chatgpt_portfolio = [
-        {"ticker": "AAPL", "shares": 5, "stop_loss": 150, "buy_price": 180, "cost_basis": 900},
-        {"ticker": "TSLA", "shares": 5, "stop_loss": 500, "buy_price": 700, "cost_basis": 3500},
-        {"ticker": "NVDA", "shares": 5, "stop_loss": 350, "buy_price": 450, "cost_basis": 2250},
-        {"ticker": "DT",   "shares": 5, "stop_loss": 35,  "buy_price": 45,  "cost_basis": 225},
-    ]
-    portfolio_html, total_market_value, total_pnl = portfolio_to_custom_html(chatgpt_portfolio)
-    sp500_change = get_sp500_daily_change()
-    portfolio_descriptions = """
-    <ul style="font-size:13px;">
-      <li><b>Ticker</b>: Stock symbol</li>
-      <li><b>Shares</b>: Number of shares held</li>
-      <li><b>Buy Price</b>: Price per share at purchase</li>
-      <li><b>Stop Loss</b>: Price at which to sell to limit loss</li>
-      <li><b>💰 Cost Basis</b>: Total amount invested (Shares × Buy Price)</li>
-      <li><b>📈 Last Price</b>: Most recent closing price</li>
-      <li><b>📊 Daily % Change</b>: Change from previous close</li>
-      <li><b>💵 Market Value</b>: Shares × Last Price</li>
-      <li><b>📊 PnL</b>: (Last Price - Buy Price) × Shares</li>
-      <li><b>📉 Risk (per share)</b>: Buy Price minus Stop Loss</li>
-      <li><b>⚠️ Total Risk</b>: Risk per share × Shares</li>
-    </ul>
-    """
-    analytics_html = f"""
-    <h3>Advanced Analytics</h3>
-    <ul style="font-size:13px;">
-      <li><b>Portfolio Market Value:</b> ${total_market_value:,.2f}</li>
-      <li><b>Portfolio Total PnL:</b> ${total_pnl:,.2f}</li>
-      <li><b>S&amp;P 500 Daily % Change:</b> {sp500_change}%</li>
-    </ul>
-    """
+    try:
+        chatgpt_portfolio = [
+            {"ticker": "AAPL", "shares": 5, "stop_loss": 150, "buy_price": 180, "cost_basis": 900},
+            {"ticker": "TSLA", "shares": 5, "stop_loss": 500, "buy_price": 700, "cost_basis": 3500},
+            {"ticker": "NVDA", "shares": 5, "stop_loss": 350, "buy_price": 450, "cost_basis": 2250},
+            {"ticker": "DT",   "shares": 5, "stop_loss": 35,  "buy_price": 45,  "cost_basis": 225},
+        ]
+        portfolio_html, total_market_value, total_pnl = portfolio_to_custom_html(chatgpt_portfolio)
+        sp500_change = get_sp500_daily_change()
+        portfolio_descriptions = """
+        <ul style="font-size:13px;">
+          <li><b>Ticker</b>: Stock symbol</li>
+          <li><b>Shares</b>: Number of shares held</li>
+          <li><b>Buy Price</b>: Price per share at purchase</li>
+          <li><b>Stop Loss</b>: Price at which to sell to limit loss</li>
+          <li><b>💰 Cost Basis</b>: Total amount invested (Shares × Buy Price)</li>
+          <li><b>📈 Last Price</b>: Most recent closing price</li>
+          <li><b>📊 Daily % Change</b>: Change from previous close</li>
+          <li><b>💵 Market Value</b>: Shares × Last Price</li>
+          <li><b>📊 PnL</b>: (Last Price - Buy Price) × Shares</li>
+          <li><b>📉 Risk (per share)</b>: Buy Price minus Stop Loss</li>
+          <li><b>⚠️ Total Risk</b>: Risk per share × Shares</li>
+        </ul>
+        """
+        analytics_html = f"""
+        <h3>Advanced Analytics</h3>
+        <ul style="font-size:13px;">
+          <li><b>Portfolio Market Value:</b> ${total_market_value:,.2f}</li>
+          <li><b>Portfolio Total PnL:</b> ${total_pnl:,.2f}</li>
+          <li><b>S&amp;P 500 Daily % Change:</b> {sp500_change}%</li>
+        </ul>
+        """
 
-    # --- Momentum Screener Section ---
-    tickers = ["AAPL", "TSLA", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "NFLX", "AMD", "INTC", "IBM", "ORCL", "QCOM", "CSCO", "ADBE"]  # Add more as desired
-    results = []
-    for ticker in tickers:
-        try:
-            data = yf.download(ticker, period="21d", interval="1d", progress=False, auto_adjust=False)
-            if data.empty or len(data) < 15:
+        # --- Momentum Screener Section ---
+        tickers = ["AAPL", "TSLA", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "NFLX", "AMD", "INTC", "IBM", "ORCL", "QCOM", "CSCO", "ADBE"]
+        results = []
+        for ticker in tickers:
+            try:
+                data = yf.download(ticker, period="21d", interval="1d", progress=False, auto_adjust=False)
+                if data.empty or len(data) < 15:
+                    continue
+                price_now = data["Close"].iloc[-1]
+                price_5d_ago = data["Close"].iloc[-6]
+                pct_change = ((price_now - price_5d_ago) / price_5d_ago) * 100
+                avg_volume = data["Volume"].tail(5).mean()
+                rsi = get_rsi(data["Close"]).iloc[-1]
+                results.append({
+                    "Ticker": ticker,
+                    "5d % Change": round(pct_change, 2),
+                    "Avg Vol (5d)": float(avg_volume.iloc[0]) if hasattr(avg_volume, "iloc") else float(avg_volume),
+                    "RSI": round(rsi, 2)
+                })
+            except Exception:
                 continue
-            price_now = data["Close"].iloc[-1]
-            price_5d_ago = data["Close"].iloc[-6]
-            pct_change = ((price_now - price_5d_ago) / price_5d_ago) * 100
-            avg_volume = data["Volume"].tail(5).mean()
-            rsi = get_rsi(data["Close"]).iloc[-1]
-            results.append({
-                "Ticker": ticker,
-                "5d % Change": round(pct_change, 2),
-                "Avg Vol (5d)": int(avg_volume),
-                "RSI": round(rsi, 2)
-            })
-        except Exception:
-            continue
 
-    df = pd.DataFrame(results)
-    if df.empty:
-        momentum_html = "<p>No suggestions today.</p>"
-    else:
-        # Example filter: RSI between 30 and 70, volume above median
-        median_vol = df["Avg Vol (5d)"].median()
-        filtered = df[(df["RSI"] > 30) & (df["RSI"] < 70) & (df["Avg Vol (5d)"] > median_vol)]
-        filtered["5d % Change"] = pd.to_numeric(filtered["5d % Change"], errors="coerce")
-        filtered = filtered.dropna(subset=["5d % Change"])
-        if filtered.empty:
+        df = pd.DataFrame(results)
+        if df.empty:
             momentum_html = "<p>No suggestions today.</p>"
         else:
-            top = filtered.sort_values("5d % Change", ascending=False).head(3)
-            momentum_html = "<h3>Momentum Screener: Top 3 Stocks (5-Day % Change, RSI, Volume)</h3>"
-            momentum_html += top.to_html(index=False, border=1, justify="center")
+            for col in ["RSI", "Avg Vol (5d)", "5d % Change"]:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+            median_vol = df["Avg Vol (5d)"].median()
+            filtered = df[(df["RSI"] > 30) & (df["RSI"] < 70) & (df["Avg Vol (5d)"] > median_vol)]
+            filtered = filtered.dropna(subset=["5d % Change"])
+            if filtered.empty:
+                momentum_html = "<p>No suggestions today.</p>"
+            else:
+                top = filtered.sort_values("5d % Change", ascending=False).head(3)
+                momentum_html = "<h3>Momentum Screener: Top 3 Stocks (5-Day % Change, RSI, Volume)</h3>"
+                momentum_html += top.to_html(index=False, border=1, justify="center")
 
-    # --- Send the combined email ---
-    try:
-        send_email(
-            subject="Your Portfolio & Momentum Screener",
-            html_body=f"""
-                <html>
-                <body>
-                    {market_summary}
-                    <h2>Your Portfolio - {today}</h2>
-                    {portfolio_html}
-                    {portfolio_descriptions}
-                    {analytics_html}
-                    {momentum_html}
-                    <p style="font-size:12px;color:gray;">This is an automated message.</p>
-                </body>
-                </html>
-            """,
-            to_email="cristianursan81@gmail.com",
-            from_email="cristianursan81@gmail.com",
-            from_password="qvtv pebu bajp uoqp"
-        )
-        print("Email sent successfully!")
+        # --- Send the combined email ---
+        try:
+            send_email(
+                subject="Your Portfolio & Momentum Screener",
+                html_body=f"""
+                    <html>
+                    <body>
+                        {market_summary}
+                        <h2>Your Portfolio - {today}</h2>
+                        {portfolio_html}
+                        {portfolio_descriptions}
+                        {analytics_html}
+                        {momentum_html}
+                        <p style="font-size:12px;color:gray;">This is an automated message.</p>
+                    </body>
+                    </html>
+                """,
+                to_email="cristianursan81@gmail.com",
+                from_email="cristianursan81@gmail.com",
+                from_password="qvtv pebu bajp uoqp"
+            )
+            print("Email sent successfully!")
+        except Exception as e:
+            print(f"Failed to send email: {e}")
     except Exception as e:
         print(f"Failed to send email: {e}")
 
