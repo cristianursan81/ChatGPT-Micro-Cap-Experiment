@@ -12,6 +12,5 @@ from trading_script import main
 if __name__ == "__main__":
 
     data_dir = Path(__file__).resolve().parent
-    main("Scripts and CSV Files/chatgpt_portfolio_update.csv", Path("Scripts and CSV Files"))
-
+    main("Start Your Own/chatgpt_portfolio_update.csv", Path("Start Your Own"))
 

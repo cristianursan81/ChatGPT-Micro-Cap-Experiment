@@ -17,11 +17,13 @@ So, starting with just $100, I wanted to answer a simple but powerful question:
 
 - Everyweek I allow it to use deep research to reevaluate it's account.
 
-- I track and publish performance data weekly on my blog. [SubStack Link](https://substack.com/@nathanbsmith?utm_source=edit-profile-page)
+- I track and publish performance data weekly on my blog. [SubStack Link](https://nathanbsmith729.substack.com)
 
   ## Research & Documentation
 
 - [Research Index](https://github.com/LuckyOne7777/ChatGPT-Micro-Cap-Experiment/blob/main/Experiment%20Details/Deep%20Research%20Index.md)
+
+- [Disclaimer](https://github.com/LuckyOne7777/ChatGPT-Micro-Cap-Experiment/blob/main/Experiment%20Details/Disclaimer.md)
 
 - [Q&A](https://github.com/LuckyOne7777/ChatGPT-Micro-Cap-Experiment/blob/main/Experiment%20Details/Q%26A.md)
 
@@ -64,7 +66,14 @@ Pandas + yFinance for data & logic
 
 Matplotlib for visualizations
 
-ChatGPT 4o for decision-making
+ChatGPT for decision-making
+
+# Installation
+To run the scripts locally, install the Python dependencies:
+
+```
+pip install -r requirements.txt
+```
 
 # Follow Along
 The experiment runs June 2025 to December 2025.

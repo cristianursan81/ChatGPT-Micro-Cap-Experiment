@@ -11,6 +11,16 @@ Yes. I wish I didn’t have to, but after ~2 weeks the performance slows down to
 ### If you could start over, what would you do differently?
 I’d make sure prompts are 100% consistent from the beginning and confirm the simulation engine was airtight before logging trades.
 
+Can I ask you a few questions? Is chatgpt automatically running the prompts you shared on github? or do you prompt it every day? are you or is the script placing the buy/sell orders?
+
+### Is prompting automated?
+
+Right now, no. All prompts are manual, but I do my best to keep things consisent.  I would love to add it using ChatGPT's API, but it would cause problems like executing trades in the in middle of the week. Absolutely doable, but I wanna focus on making it user friendly right now.
+
+### What about buying and selling?
+
+Also no. All live trades are manual currently. However for the simuation, it is slightly easier to place orders via input() when running Trading Script. Of course, still needs work.
+
 ### What strengths or weaknesses have you noticed in the model?
 **Strengths**: It’s incredible at finding overlooked data in obscure filings, especially biotech reports nobody reads. It also seems to great at capitalizing on short-term momentum.
 **Weaknesses**: It often struggles with patience. It’s unclear if it can hold through the full timeline of a catalyst. And switching chats can cause it to lose conviction and restructure prematurely.
@@ -35,4 +45,4 @@ It has serious potential. Most retail traders chase SPY predictions with random 
 
 Want to submit a question? 
 
-Please do so here: nathanbsmith729@gmail.com
+Please do so here: nathanbsmith.business@gmail.com
