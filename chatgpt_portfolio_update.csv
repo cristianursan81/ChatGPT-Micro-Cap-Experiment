@@ -1,0 +1,5 @@
+Date,Ticker,Shares,Buy Price,Cost Basis,Stop Loss,Current Price,Total Value,PnL,Action,Cash Balance,Total Equity
+2025-08-21,SPY,10.0,634.0,6340.0,570.0,635.55,6355.5,15.5,HOLD,,
+2025-08-21,TOTAL,,,,,,6355.5,15.5,,3660.0,10015.5
+2025-08-22,SPY,10,634.0,6340.0,570.0,646.05,6460.5,120.5,HOLD,,
+2025-08-22,TOTAL,,,,,,6460.5,120.5,,3660.0,10120.5
