@@ -1,0 +1,21 @@
+{
+  "ai": {
+    "enabled": true,
+    "primary_model": "llama3.2:3b",
+    "fallback_model": "phi3:mini",
+    "timeout": 30
+  },
+  "trading": {
+    "max_position_size": 0.1,
+    "default_stop_loss_pct": 0.15,
+    "cash_reserve_pct": 0.05
+  },
+  "data": {
+    "retry_attempts": 3,
+    "data_delay": 1
+  },
+  "notifications": {
+    "email_enabled": false,
+    "log_level": "INFO"
+  }
+}
